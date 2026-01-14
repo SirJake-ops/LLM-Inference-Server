@@ -26,7 +26,7 @@ void load_routes::Routes::get_hi() {
 }
 void load_routes::Routes::stop_server() {
     try {
-        _svr.Get("/stop", [&](const httplib::Request &req, httplib::Response &res) { _svr.stop(); });
+        svr_.Get("/stop", [&](const httplib::Request &req, httplib::Response &res) { _svr.stop(); });
     } catch (...) {
         std::cerr << "Server cannot stop." << std::endl;
     }
