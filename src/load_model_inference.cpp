@@ -8,13 +8,13 @@
 std::vector<float> model_inference::ModelInference::run_inference(const std::vector<std::int64_t> &input_ids) {
     const Ort::AllocatorWithDefaultOptions allocator;
 
-    std::vector<std::int64_t> input_shape = {1, static_cast<std::int64_t>(input_ids.size())};
+    const std::vector<std::int64_t> input_shape = {1, static_cast<std::int64_t>(input_ids.size())};
 
     const auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
     const Ort::Value input_tensor = Ort::Value::CreateTensor<std::int64_t>(
             memory_info, const_cast<std::int64_t *>(input_ids.data()), input_ids.size(),
-            const_cast<std::int64_t *>(input_shape.data()), input_shape.size());
+            input_shape.data(), input_shape.size());
 
     const auto input_name = session_.GetInputNameAllocated(0, allocator);
     const auto output_name = session_.GetOutputNameAllocated(0, allocator);

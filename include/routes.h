@@ -21,6 +21,7 @@ namespace load_routes {
 
         void start(const char *host, const int &port);
         void get_hi();
+        void run_model();
         void stop_server();
 
     private:
