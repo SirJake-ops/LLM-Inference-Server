@@ -8,10 +8,38 @@
 #include "../include/load_model_inference.h"
 #include "onnxruntime_cxx_api.h"
 
+template<typename T>
+struct JsonResponse {
+    std::string key_;
+    T value_;
+
+    friend std::ostream &operator<<(std::ostream &os, const JsonResponse &other) {
+        os << other.key_ << ", " << other.value_ << std::endl;
+        return os;
+    }
+};
+
 std::vector<float> run_inference(const std::vector<std::int64_t> &input_ids) {
-    model_inference::ModelInference model("../models/decoder_model.onnx");
+    static model_inference::ModelInference model("../models/decoder_model.onnx");
     auto out_put = model.run_inference(input_ids);
     return out_put;
+}
+
+int get_next_token(const std::vector<float> &logits, const std::size_t vocab_size = 50257) {
+    const std::size_t last_token_start = logits.size() - vocab_size;
+
+    int best_token{0};
+
+
+    float best_score = logits.at(last_token_start);
+
+    for (std::size_t i = 1; i < vocab_size; i++) {
+        if (logits.at(last_token_start + i) > best_score) {
+            best_score = logits.at(last_token_start + i);
+            best_token = static_cast<int>(i);
+        }
+    }
+    return best_token;
 }
 
 void load_routes::Routes::start(const char *host, const int &port) {
@@ -37,7 +65,12 @@ void load_routes::Routes::run_model() {
     try {
         svr_.Get("/run_model", [](const httplib::Request &req, httplib::Response &res) {
             const std::vector<std::int64_t> input_ids = {15496, 995};
-            run_inference(input_ids);
+            const auto output = run_inference(input_ids);
+            const int next_token = get_next_token(output);
+
+            res.set_content("next_token_id: " + std::to_string(next_token) + "\n" +
+                                    "input_length: " + std::to_string(input_ids.size()),
+                            "text/plain");
         });
     } catch (const Ort::Exception e) {
         std::cerr << "Model failed to run: " << e.what() << std::endl;

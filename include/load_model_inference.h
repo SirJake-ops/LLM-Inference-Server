@@ -27,16 +27,8 @@ namespace model_inference {
             // TODO: This method is for showing general info, need to figure out what I want to display.
         }
 
-        std::vector<float> run_inference(const std::vector<std::int64_t>& inputs);
+        std::vector<float> run_inference(const std::vector<std::int64_t> &inputs);
     };
 } // namespace model_inference
 
 #endif // LLM_INFERENCE_ENGINE_LOAD_MODEL_INFERENCE_H
-
-//     // Run inference
-//     std::vector<Ort::Value> outputTensors =
-//     session.Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor,
-//     inputNames.size(), outputNames.data(), outputNames.size());
-//     const float* outputDataPtr = outputTensors[0].GetTensorMutableData();
-//     std::cout << outputDataPtr[0] << std::endl;
-// }
