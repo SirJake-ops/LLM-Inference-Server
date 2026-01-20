@@ -19,7 +19,6 @@ namespace load_routes {
         Routes(Routes &) = delete;
         Routes &operator=(const Routes &) = delete;
 
-        static void set_model_path(const std::string &model_path);
         void start(const char *host, const int &port);
         void get_hi();
         void run_model();
@@ -30,7 +29,6 @@ namespace load_routes {
         Routes() = default;
         httplib::Server svr_;
         httplib::ErrorLogger logger_;
-        std::string path_to_model_;
     };
 } // namespace load_routes
 

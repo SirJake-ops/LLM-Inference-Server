@@ -56,6 +56,7 @@ void load_routes::Routes::start(const char *host, const int &port) {
     { // GET Requests
         get_hi();
         run_model();
+        generate();
         stop_server();
     }
     svr_.listen(host, port);
@@ -96,8 +97,8 @@ void load_routes::Routes::stop_server() {
 }
 
 void load_routes::Routes::generate() {
-    svr_.Get("/generate", [](const httplib::Request &req, httplib::Response &res) {
-        try {
+    try {
+        svr_.Get("/generate", [](const httplib::Request &req, httplib::Response &res) {
             std::vector<std::int64_t> input_ids;
             if (req.has_param("input_ids")) {
                 std::string ids_str = req.get_param_value("input_ids");
@@ -110,11 +111,9 @@ void load_routes::Routes::generate() {
             } else {
                 input_ids = {15496, 995};
             }
-
             auto generated = generate_text(input_ids);
-        } catch (...) {
-            res.status = 400;
-            res.set_content("invalid input", "text/plain");
-        }
-    });
+        });
+    } catch (Ort::Exception e) {
+        std::cerr << "Model failed to generate response: " << e.what() << std::endl;
+    }
 }
