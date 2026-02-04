@@ -26,6 +26,7 @@ TEST(ModelInference, EmptyInput) {
 
 TEST(ModelInference, VeryLongSequence) {
   std::vector<int64_t> long_input(2048, 1);
+
   // Should not crash or OOM
 }
 
@@ -35,7 +36,7 @@ TEST(ModelInference, NoMemoryLeaks) {
   // Check memory usage stays stable
 }
 
-// Concurrency (if you add it)
+// Concurrency
 TEST(ModelInference, ConcurrentRequests) {
   // Multiple threads calling inference
   // Should not crash or corrupt data
