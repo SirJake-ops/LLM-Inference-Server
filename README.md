@@ -130,9 +130,4 @@ Cause:
 Fix:
 
 - Place the ONNX model file at `models/decoder_model.onnx`
-
-## Notes
-
-- `httplib.h` is header-only and is vendored in `third_party/http/`
-- ONNX Runtime headers are vendored in `third_party/onnx/`
 - The shared library binary is intentionally not committed to this repository
