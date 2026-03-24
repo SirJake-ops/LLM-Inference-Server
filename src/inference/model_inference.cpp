@@ -5,10 +5,15 @@
 #include "fictional_funicular/inference/model_inference.h"
 
 #include <filesystem>
+#include <string>
+#include <string_view>
 #include <stdexcept>
 #include <vector>
 
 namespace {
+constexpr std::int64_t kDefaultAttentionHeadCount = 16;
+constexpr std::int64_t kDefaultAttentionHeadSize = 64;
+
 std::filesystem::path resolve_model_path(const std::filesystem::path &model_path) {
     if (model_path.is_absolute() && std::filesystem::exists(model_path)) {
         return model_path;
@@ -48,6 +53,34 @@ std::filesystem::path resolve_model_path(const std::filesystem::path &model_path
     throw std::runtime_error("Model file does not exist and no .onnx file was found in " +
                              models_dir.string());
 }
+
+std::size_t get_required_cache_layer_count(Ort::Session &session) {
+    const Ort::AllocatorWithDefaultOptions allocator;
+    std::size_t layer_count = 0;
+
+    for (std::size_t i = 0; i < session.GetInputCount(); ++i) {
+        const auto input_name = session.GetInputNameAllocated(i, allocator);
+        const std::string_view name{input_name.get()};
+        if (name.starts_with("past_key_values.") && name.ends_with(".key")) {
+            ++layer_count;
+        }
+    }
+
+    return layer_count;
+}
+
+std::int64_t get_past_sequence_length(const cache::KVCache &layer_cache) {
+    if (layer_cache._keys.empty()) {
+        return 0;
+    }
+
+    const auto shape = layer_cache._keys.front().GetTensorTypeAndShapeInfo().GetShape();
+    if (shape.size() < 3) {
+        return 0;
+    }
+
+    return shape[2] < 0 ? 0 : shape[2];
+}
 } // namespace
 
 model_inference::ModelInference::ModelInference(const std::filesystem::path &path_to_model)
@@ -73,16 +106,29 @@ std::vector<float> model_inference::ModelInference::run_inference(
     }
 
     const Ort::AllocatorWithDefaultOptions allocator;
+    const std::size_t required_cache_layers = get_required_cache_layer_count(session_);
+    const std::size_t active_cache_layers =
+        std::max(required_cache_layers, static_cast<std::size_t>(number_of_layers));
+    const std::int64_t past_sequence_length =
+        _layer_cache.empty() ? 0 : get_past_sequence_length(_layer_cache.front());
 
     const std::vector<std::int64_t> input_shape = {
         1, static_cast<std::int64_t>(input_ids.size())
     };
     std::vector<std::int64_t> input_ids_copy = input_ids;
-    std::vector<std::int64_t> attention_mask(input_ids.size(), 1);
+    std::vector<std::int64_t> attention_mask(
+        static_cast<std::size_t>(past_sequence_length + static_cast<std::int64_t>(input_ids.size())), 1);
+    const std::vector<std::int64_t> attention_mask_shape = {
+        1, static_cast<std::int64_t>(attention_mask.size())
+    };
     std::vector<std::int64_t> position_ids(input_ids.size());
     for (std::size_t i = 0; i < position_ids.size(); ++i) {
-        position_ids[i] = static_cast<std::int64_t>(i);
+        position_ids[i] = past_sequence_length + static_cast<std::int64_t>(i);
     }
+    const std::vector<std::int64_t> empty_cache_shape = {
+        1, kDefaultAttentionHeadCount, past_sequence_length, kDefaultAttentionHeadSize
+    };
+    std::vector<std::vector<float>> empty_cache_buffers(active_cache_layers * 2);
 
     const auto memory_info =
             Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
@@ -93,7 +139,7 @@ std::vector<float> model_inference::ModelInference::run_inference(
 
     Ort::Value mask_tensor = Ort::Value::CreateTensor(
         memory_info, attention_mask.data(), attention_mask.size(),
-        input_shape.data(), input_shape.size());
+        attention_mask_shape.data(), attention_mask_shape.size());
 
     Ort::Value position_tensor = Ort::Value::CreateTensor<std::int64_t>(
         memory_info, position_ids.data(), position_ids.size(),
@@ -105,9 +151,9 @@ std::vector<float> model_inference::ModelInference::run_inference(
     std::vector<const char *> output_names;
     std::vector<Ort::Value> input_tensors;
 
-    input_name_storage.reserve(3 + number_of_layers * 2);
-    input_tensors.reserve(3 + number_of_layers * 2);
-    input_names.reserve(3 + number_of_layers * 2);
+    input_name_storage.reserve(3 + active_cache_layers * 2);
+    input_tensors.reserve(3 + active_cache_layers * 2);
+    input_names.reserve(3 + active_cache_layers * 2);
 
     input_name_storage.push_back("input_ids");
     input_tensors.push_back(std::move(input_tensor));
@@ -118,13 +164,23 @@ std::vector<float> model_inference::ModelInference::run_inference(
     input_name_storage.push_back("position_ids");
     input_tensors.push_back(std::move(position_tensor));
 
-    for (int i = 0; i < number_of_layers; ++i) {
-        if (!_layer_cache.at(i)._keys.empty() && !_layer_cache.at(i)._values.empty()) {
-            input_name_storage.push_back("past_key_values." + std::to_string(i) + ".key");
+    for (std::size_t i = 0; i < active_cache_layers; ++i) {
+        input_name_storage.push_back("past_key_values." + std::to_string(i) + ".key");
+        if (i < _layer_cache.size() && !_layer_cache[i]._keys.empty()) {
             input_tensors.push_back(std::move(_layer_cache[i]._keys.back()));
+        } else {
+            input_tensors.push_back(Ort::Value::CreateTensor<float>(
+                memory_info, empty_cache_buffers[i * 2].data(), empty_cache_buffers[i * 2].size(),
+                empty_cache_shape.data(), empty_cache_shape.size()));
+        }
 
-            input_name_storage.push_back("past_key_values." + std::to_string(i) + ".value");
+        input_name_storage.push_back("past_key_values." + std::to_string(i) + ".value");
+        if (i < _layer_cache.size() && !_layer_cache[i]._values.empty()) {
             input_tensors.push_back(std::move(_layer_cache[i]._values.back()));
+        } else {
+            input_tensors.push_back(Ort::Value::CreateTensor<float>(
+                memory_info, empty_cache_buffers[i * 2 + 1].data(), empty_cache_buffers[i * 2 + 1].size(),
+                empty_cache_shape.data(), empty_cache_shape.size()));
         }
     }
 
@@ -146,9 +202,11 @@ std::vector<float> model_inference::ModelInference::run_inference(
             session_.Run(Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
                          input_tensors.size(), output_names.data(), output_names.size());
 
-    const std::size_t expected_cache_outputs = 1 + static_cast<std::size_t>(number_of_layers) * 2;
+    const std::size_t cache_layers_to_store = std::min(
+        static_cast<std::size_t>(number_of_layers), required_cache_layers);
+    const std::size_t expected_cache_outputs = 1 + required_cache_layers * 2;
     if (output_tensors.size() >= expected_cache_outputs) {
-        for (int i = 0; i < number_of_layers; ++i) {
+        for (std::size_t i = 0; i < cache_layers_to_store; ++i) {
             const std::size_t key_index = 1 + static_cast<std::size_t>(i) * 2;
             const std::size_t value_index = 2 + static_cast<std::size_t>(i) * 2;
 

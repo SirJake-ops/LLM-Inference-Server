@@ -23,7 +23,7 @@ TEST(RouteTest, RunModelHandlerFormatsInferenceOutput) {
   load_routes::Routes::get_route_instance().handle_run_model_request(
       req, res, [](const std::vector<std::int64_t> &input_ids) {
         EXPECT_FALSE(input_ids.empty());
-        EXPECT_EQ(input_ids.front(), 5);
+        EXPECT_EQ(input_ids.front(), static_cast<std::int64_t>('h'));
         std::vector<float> logits(50257 * 2, -1.0f);
         logits[50257 + 1] = 10.0f;
         return logits;
@@ -31,7 +31,7 @@ TEST(RouteTest, RunModelHandlerFormatsInferenceOutput) {
 
   EXPECT_EQ(res.status, 200);
   EXPECT_NE(res.body.find("next_token_id: 1"), std::string::npos);
-  EXPECT_NE(res.body.find("input_length: 2"), std::string::npos);
+  EXPECT_NE(res.body.find("input_length: 5"), std::string::npos);
 }
 
 TEST(RouteTest, RunModelHandlerReturnsStdExceptionMessage) {

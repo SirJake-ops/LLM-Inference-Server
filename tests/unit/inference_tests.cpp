@@ -102,5 +102,20 @@ TEST(InferenceLayerCountTest, NumberOfLayersForRunningInference) {
   auto res = model_inference.run_inference(input_ids, number_of_layers);
 
   EXPECT_EQ(model_inference.get_number_of_layers(), number_of_layers);
+}
 
+TEST(InferenceGenericHelloTest, HelloWorldTest) {
+  token::Tokenizer tokenizer;
+  const std::vector<std::int64_t> input_ids = tokenizer.encode("Hello, ");
+  constexpr int number_of_layers = 12;
+  const std::filesystem::path model_path = "models/model.onnx";
+  model_inference::ModelInference model_inference(model_path);
+
+  auto res = model_inference.run_inference(input_ids, number_of_layers);
+  const int next_token = load_routes::get_next_token(res);
+
+
+  EXPECT_FALSE(res.empty());
+  EXPECT_GE(next_token, 0);
+  EXPECT_LT(next_token, 50257);
 }
