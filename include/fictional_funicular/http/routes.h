@@ -5,10 +5,11 @@
 #ifndef LLM_INFERENCE_ENGINE_ROUTES_H
 #define LLM_INFERENCE_ENGINE_ROUTES_H
 #include "httplib.h"
-#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <vector>
+
+#include "fictional_funicular/tokenizer/tokenizer.h"
 
 
 enum class REST;
@@ -26,11 +27,12 @@ namespace load_routes {
                        std::size_t vocab_size = 50257);
 
     void handle_hi_request(const httplib::Request &req, httplib::Response &res);
+
     void handle_run_model_request(const httplib::Request &req, httplib::Response &res,
                                   const InferenceRunner &runner = run_inference);
 
-    void register_routes(httplib::Server &server);
-    void register_routes(httplib::Server &server, const InferenceRunner &runner);
+    void register_routes(httplib::Server &server,
+                         const InferenceRunner &runner = run_inference);
 
     class Routes {
     public:
@@ -43,14 +45,15 @@ namespace load_routes {
         Routes &operator=(const Routes &) = delete;
 
         void start(const char *host, const int &port);
-        void get_hi();
-        void run_model();
-        void stop_server();
+        void handle_run_model_request(const httplib::Request &req,
+                                      httplib::Response &res,
+                                      const InferenceRunner &runner = run_inference);
 
     private:
         Routes() = default;
         httplib::Server svr_;
         httplib::ErrorLogger logger_;
+        token::Tokenizer _tokenizer;
     };
 } // namespace load_routes
 

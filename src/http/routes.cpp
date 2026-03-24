@@ -5,6 +5,7 @@
 #include "fictional_funicular/http/routes.h"
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 
 #include "fictional_funicular/inference/model_inference.h"
@@ -13,17 +14,21 @@
 std::vector<float> load_routes::run_inference_with_model(
     const std::vector<std::int64_t> &input_ids,
     const std::filesystem::path &model_path) {
-    if (!std::filesystem::exists(model_path)) {
-        throw std::runtime_error("Missing model file at " + model_path.string());
+    static std::filesystem::path loaded_model_path;
+    static std::unique_ptr<model_inference::ModelInference> model;
+
+    if (!model || loaded_model_path != model_path) {
+        model = std::make_unique<model_inference::ModelInference>(
+            model_path);
+        loaded_model_path = model_path;
     }
 
-    static model_inference::ModelInference model(model_path.string());
-    return model.run_inference(input_ids);
+    return model->run_inference(input_ids, 12);
 }
 
 std::vector<float> load_routes::run_inference(
     const std::vector<std::int64_t> &input_ids) {
-    return run_inference_with_model(input_ids);
+    return run_inference_with_model(input_ids, "models/model.onnx");
 }
 
 int load_routes::get_next_token(const std::vector<float> &logits,
@@ -48,16 +53,12 @@ int load_routes::get_next_token(const std::vector<float> &logits,
     return best_token;
 }
 
-void load_routes::register_routes(httplib::Server &server) {
-    register_routes(server, run_inference);
-}
-
 void load_routes::register_routes(httplib::Server &server,
                                   const InferenceRunner &runner) {
     server.Get("/hi", handle_hi_request);
 
     server.Get("/run_model", [runner](const httplib::Request &req, httplib::Response &res) {
-        handle_run_model_request(req, res, runner);
+        Routes::get_route_instance().handle_run_model_request(req, res, runner);
     });
 
     server.Get("/stop", [&](const httplib::Request &, httplib::Response &) { server.stop(); });
@@ -68,17 +69,24 @@ void load_routes::handle_hi_request(const httplib::Request &, httplib::Response 
     res.set_content("Hello from the class", "text/plain");
 }
 
-void load_routes::handle_run_model_request(const httplib::Request &,
-                                           httplib::Response &res,
-                                           const InferenceRunner &runner) {
+void load_routes::Routes::handle_run_model_request(const httplib::Request &req,
+                                                   httplib::Response &res,
+                                                   const InferenceRunner &runner) {
     try {
-        const std::vector<std::int64_t> input_ids = {15496, 995};
+
+        std::string prompt_input = req.body;
+
+        const std::vector<std::int64_t> input_ids = _tokenizer.encode(prompt_input);
+
         const auto output = runner(input_ids);
         const int next_token = get_next_token(output);
+        std::string decoded = _tokenizer.decode({next_token});
+
 
         res.status = 200;
         res.set_content("next_token_id: " + std::to_string(next_token) + "\n" +
-                                "input_length: " + std::to_string(input_ids.size()),
+                        "decoded: " + decoded + "\n" +
+                        "input_length: " + std::to_string(input_ids.size()),
                         "text/plain");
     } catch (const Ort::Exception &e) {
         res.status = 500;
@@ -93,47 +101,5 @@ void load_routes::Routes::start(const char *host, const int &port) {
     register_routes(svr_);
     if (!svr_.listen(host, port)) {
         std::cerr << "Server failed to listen on " << host << ":" << port << std::endl;
-    }
-}
-
-void load_routes::Routes::get_hi() {
-    try {
-        svr_.Get("/hi", [](const httplib::Request &req, httplib::Response &res) {
-            res.set_content("Hello from the class", "text/plain");
-        });
-    } catch (...) {
-        std::cerr << "Request not valid" << std::endl;
-    }
-}
-
-void load_routes::Routes::run_model() {
-    try {
-        svr_.Get("/run_model", [](const httplib::Request &req, httplib::Response &res) {
-            try {
-                const std::vector<std::int64_t> input_ids = {15496, 995};
-                const auto output = load_routes::run_inference(input_ids);
-                const int next_token = get_next_token(output);
-
-                res.set_content("next_token_id: " + std::to_string(next_token) + "\n" +
-                                        "input_length: " + std::to_string(input_ids.size()),
-                                "text/plain");
-            } catch (const Ort::Exception &e) {
-                res.status = 500;
-                res.set_content(std::string("Model failed to run: ") + e.what(), "text/plain");
-            } catch (const std::exception &e) {
-                res.status = 500;
-                res.set_content(e.what(), "text/plain");
-            }
-        });
-    } catch (const Ort::Exception &e) {
-        std::cerr << "Model failed to run: " << e.what() << std::endl;
-    }
-}
-
-void load_routes::Routes::stop_server() {
-    try {
-        svr_.Get("/stop", [&](const httplib::Request &req, httplib::Response &res) { svr_.stop(); });
-    } catch (...) {
-        std::cerr << "Server cannot stop." << std::endl;
     }
 }
