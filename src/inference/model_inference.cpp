@@ -54,7 +54,7 @@ std::filesystem::path resolve_model_path(const std::filesystem::path &model_path
                              models_dir.string());
 }
 
-std::size_t get_required_cache_layer_count(Ort::Session &session) {
+std::size_t inspect_required_cache_layer_count(Ort::Session &session) {
     const Ort::AllocatorWithDefaultOptions allocator;
     std::size_t layer_count = 0;
 
@@ -91,6 +91,7 @@ model_inference::ModelInference::ModelInference(const std::filesystem::path &pat
 
     const auto resolved_model_path = resolve_model_path(path_to_model);
     session_ = Ort::Session(env_, resolved_model_path.c_str(), ort_session_options_);
+    required_cache_layer_count_ = inspect_required_cache_layer_count(session_);
 }
 
 std::vector<float> model_inference::ModelInference::run_inference(
@@ -106,7 +107,7 @@ std::vector<float> model_inference::ModelInference::run_inference(
     }
 
     const Ort::AllocatorWithDefaultOptions allocator;
-    const std::size_t required_cache_layers = get_required_cache_layer_count(session_);
+    const std::size_t required_cache_layers = required_cache_layer_count_;
     const std::size_t active_cache_layers =
         std::max(required_cache_layers, static_cast<std::size_t>(number_of_layers));
     const std::int64_t past_sequence_length =
@@ -228,4 +229,22 @@ std::vector<float> model_inference::ModelInference::run_inference(
     }
 
     return std::vector<float>(output_data, output_data + output_size);
+}
+
+void model_inference::ModelInference::reset_cache() {
+    for (auto &layer_cache : _layer_cache) {
+        layer_cache.clear();
+    }
+}
+
+std::size_t model_inference::ModelInference::get_required_cache_layer_count() const {
+    return required_cache_layer_count_;
+}
+
+std::size_t model_inference::ModelInference::get_cached_sequence_length() const {
+    if (_layer_cache.empty()) {
+        return 0;
+    }
+
+    return static_cast<std::size_t>(get_past_sequence_length(_layer_cache.front()));
 }

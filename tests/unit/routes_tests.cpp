@@ -60,3 +60,46 @@ TEST(RouteTest, RunModelHandlerReturnsOrtExceptionMessage) {
   EXPECT_NE(res.body.find("Model failed to run: ORT exploded"),
             std::string::npos);
 }
+
+TEST(RouteTest, GenerateHandlerReturnsDecodedTextAndCacheMetadata) {
+  httplib::Request req;
+  httplib::Response res;
+  req.body = "Hi";
+  req.params.emplace("max_tokens", "2");
+
+  load_routes::Routes::get_route_instance().handle_generate_request(
+      req, res, [](const std::string &prompt, const std::size_t max_new_tokens) {
+        EXPECT_EQ(prompt, "Hi");
+        EXPECT_EQ(max_new_tokens, 2U);
+        return load_routes::GenerationResult{
+            .prompt = prompt,
+            .generated_text = "OK",
+            .prompt_token_ids = {72, 105},
+            .generated_token_ids = {79, 75},
+            .cache_layers = 24,
+            .cache_sequence_length = 4,
+        };
+      });
+
+  EXPECT_EQ(res.status, 200);
+  EXPECT_EQ(res.get_header_value("Content-Type"), "application/json");
+  EXPECT_NE(res.body.find("\"generated_text\":\"OK\""), std::string::npos);
+  EXPECT_NE(res.body.find("\"response_text\":\"HiOK\""), std::string::npos);
+  EXPECT_NE(res.body.find("\"cache_layers\":24"), std::string::npos);
+  EXPECT_NE(res.body.find("\"cache_sequence_length\":4"), std::string::npos);
+}
+
+TEST(RouteTest, GenerateHandlerRejectsZeroMaxTokens) {
+  httplib::Request req;
+  httplib::Response res;
+  req.body = "Hi";
+  req.params.emplace("max_tokens", "0");
+
+  load_routes::Routes::get_route_instance().handle_generate_request(
+      req, res, [](const std::string &, const std::size_t) {
+        return load_routes::GenerationResult{};
+      });
+
+  EXPECT_EQ(res.status, 400);
+  EXPECT_EQ(res.body, "max_tokens must be greater than 0");
+}

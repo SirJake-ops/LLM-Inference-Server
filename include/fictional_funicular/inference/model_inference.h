@@ -17,15 +17,17 @@ namespace model_inference {
             return _layer_cache.size();
         }
 
-
-
         std::vector<float> run_inference(const std::vector<std::int64_t> &inputs, const int &number_of_layers);
+        void reset_cache();
+        std::size_t get_required_cache_layer_count() const;
+        std::size_t get_cached_sequence_length() const;
 
     private:
         Ort::Env env_;
         Ort::Session session_;
         Ort::SessionOptions ort_session_options_;
         std::vector<cache::KVCache> _layer_cache;
+        std::size_t required_cache_layer_count_{0};
     };
 } // namespace model_inference
 

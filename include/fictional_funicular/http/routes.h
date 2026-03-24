@@ -16,12 +16,26 @@ enum class REST;
 namespace load_routes {
     using InferenceRunner =
         std::function<std::vector<float>(const std::vector<std::int64_t> &)>;
+    struct GenerationResult {
+        std::string prompt;
+        std::string generated_text;
+        std::vector<std::int64_t> prompt_token_ids;
+        std::vector<std::int64_t> generated_token_ids;
+        std::size_t cache_layers{0};
+        std::size_t cache_sequence_length{0};
+    };
+    using GenerationRunner =
+        std::function<GenerationResult(const std::string &, std::size_t)>;
 
     std::vector<float> run_inference_with_model(
         const std::vector<std::int64_t> &input_ids,
-        const std::filesystem::path &model_path = "models/decoder_model.onnx");
+        const std::filesystem::path &model_path = "models/model.onnx");
 
     std::vector<float> run_inference(const std::vector<std::int64_t> &input_ids);
+    GenerationResult generate_with_model(const std::string &prompt,
+                                         std::size_t max_new_tokens,
+                                         const std::filesystem::path &model_path = "models/model.onnx");
+    GenerationResult generate(const std::string &prompt, std::size_t max_new_tokens);
 
     int get_next_token(const std::vector<float> &logits,
                        std::size_t vocab_size = 50257);
@@ -30,9 +44,12 @@ namespace load_routes {
 
     void handle_run_model_request(const httplib::Request &req, httplib::Response &res,
                                   const InferenceRunner &runner = run_inference);
+    void handle_generate_request(const httplib::Request &req, httplib::Response &res,
+                                 const GenerationRunner &runner = generate);
 
     void register_routes(httplib::Server &server,
-                         const InferenceRunner &runner = run_inference);
+                         const InferenceRunner &runner = run_inference,
+                         const GenerationRunner &generation_runner = generate);
 
     class Routes {
     public:
@@ -48,6 +65,9 @@ namespace load_routes {
         void handle_run_model_request(const httplib::Request &req,
                                       httplib::Response &res,
                                       const InferenceRunner &runner = run_inference);
+        void handle_generate_request(const httplib::Request &req,
+                                     httplib::Response &res,
+                                     const GenerationRunner &runner = generate);
 
     private:
         Routes() = default;
