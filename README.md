@@ -194,14 +194,6 @@ This should not be exposed on an untrusted network.
 - The executable build uses `BUILD_RPATH` to find the ONNX Runtime shared library from the configured models directory.
 - The HTTP layer currently returns plain text for error responses and JSON only for `/generate`.
 
-## Known Limitations
-
-- The tokenizer is byte-based and simplified. It keeps token ids inside safe ONNX bounds for this project, but it is not a true model tokenizer.
-- The generation strategy is greedy argmax only.
-- There is no streaming response mode.
-- There is no authentication, rate limiting, structured logging, or configuration layer.
-- The service is tuned for local development, not multi-tenant or internet-facing deployment.
-
 ## Common Failure Modes
 
 ### Build fails with missing ONNX Runtime library
