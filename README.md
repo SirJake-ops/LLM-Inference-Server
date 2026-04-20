@@ -135,8 +135,8 @@ Example response:
   "prompt": "Hello, ",
   "generated_text": "<tok:123><tok:456>",
   "response_text": "Hello, <tok:123><tok:456>",
-  "prompt_token_ids": [72,101,108,108,111,44,32],
-  "generated_token_ids": [123,456],
+  "prompt_token_ids": [72, 101, 108, 108, 111, 44, 32],
+  "generated_token_ids": [123, 456],
   "prompt_token_count": 7,
   "generated_token_count": 2,
   "cache_layers": 24,
@@ -158,7 +158,7 @@ Response fields:
 
 ### `GET /run_model`
 
-Legacy debug endpoint that performs a single inference step and returns the next token id plus a decoded representation.
+Legacy debug endpoint that performs a single inference step and returns JSON with the next token id plus a decoded representation.
 
 This route is useful for debugging, not as the primary API.
 
@@ -242,13 +242,3 @@ Fix:
 - Place the ONNX model at `models/model.onnx`
 - Confirm the model expects the current `input_ids`, `attention_mask`, `position_ids`, and KV-cache inputs
 - Send a non-empty prompt body
-
-## Development Notes
-
-If you change the model contract, review these areas together:
-
-- [routes.cpp](/home/jake/cpp-projects/fictional-funicular/src/http/routes.cpp)
-- [model_inference.cpp](/home/jake/cpp-projects/fictional-funicular/src/inference/model_inference.cpp)
-- [tokenizer.cpp](/home/jake/cpp-projects/fictional-funicular/src/tokenizer/tokenizer.cpp)
-- [inference_tests.cpp](/home/jake/cpp-projects/fictional-funicular/tests/unit/inference_tests.cpp)
-- [routes_tests.cpp](/home/jake/cpp-projects/fictional-funicular/tests/unit/routes_tests.cpp)

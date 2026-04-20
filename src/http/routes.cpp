@@ -107,6 +107,22 @@ std::string generation_result_to_json(const load_routes::GenerationResult &resul
          << "}";
     return json.str();
 }
+
+std::string single_step_result_to_json(const std::string &prompt,
+                                       const std::vector<std::int64_t> &prompt_token_ids,
+                                       const std::int64_t next_token_id,
+                                       const std::string &decoded_text) {
+    std::ostringstream json;
+    json << "{"
+         << "\"prompt\":\"" << json_escape(prompt) << "\","
+         << "\"decoded_text\":\"" << json_escape(decoded_text) << "\","
+         << "\"response_text\":\"" << json_escape(prompt + decoded_text) << "\","
+         << "\"prompt_token_ids\":" << encode_token_ids_json(prompt_token_ids) << ","
+         << "\"next_token_id\":" << next_token_id << ","
+         << "\"input_length\":" << prompt_token_ids.size()
+         << "}";
+    return json.str();
+}
 } // namespace
 
 std::vector<float> load_routes::run_inference_with_model(
@@ -222,14 +238,12 @@ void load_routes::Routes::handle_run_model_request(const httplib::Request &req,
     try {
         const std::vector<std::int64_t> input_ids = _tokenizer.encode(req.body);
         const auto output = runner(input_ids);
-        const int next_token = get_next_token(output);
+        const auto next_token = static_cast<std::int64_t>(get_next_token(output));
         const std::string decoded = _tokenizer.decode({next_token});
 
         res.status = 200;
-        res.set_content("next_token_id: " + std::to_string(next_token) + "\n" +
-                        "decoded: " + decoded + "\n" +
-                        "input_length: " + std::to_string(input_ids.size()),
-                        "text/plain");
+        res.set_content(single_step_result_to_json(req.body, input_ids, next_token, decoded),
+                        "application/json");
     } catch (const Ort::Exception &e) {
         res.status = 500;
         res.set_content(std::string("Model failed to run: ") + e.what(), "text/plain");

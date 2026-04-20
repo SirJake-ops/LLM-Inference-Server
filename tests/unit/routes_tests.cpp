@@ -30,8 +30,12 @@ TEST(RouteTest, RunModelHandlerFormatsInferenceOutput) {
       });
 
   EXPECT_EQ(res.status, 200);
-  EXPECT_NE(res.body.find("next_token_id: 1"), std::string::npos);
-  EXPECT_NE(res.body.find("input_length: 5"), std::string::npos);
+  EXPECT_EQ(res.get_header_value("Content-Type"), "application/json");
+  EXPECT_NE(res.body.find("\"prompt\":\"hello\""), std::string::npos);
+  EXPECT_NE(res.body.find("\"next_token_id\":1"), std::string::npos);
+  EXPECT_NE(res.body.find("\"decoded_text\":\""), std::string::npos);
+  EXPECT_NE(res.body.find("\"response_text\":\"hello"), std::string::npos);
+  EXPECT_NE(res.body.find("\"input_length\":5"), std::string::npos);
 }
 
 TEST(RouteTest, RunModelHandlerReturnsStdExceptionMessage) {

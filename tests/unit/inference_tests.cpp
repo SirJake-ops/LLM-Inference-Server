@@ -70,7 +70,9 @@ TEST(RunModelTest, HandleRunModelRequest) {
 
 
   EXPECT_EQ(res.status, 200);
-  EXPECT_NE(res.body.find("next_token_id: 1"), std::string::npos);
+  EXPECT_EQ(res.get_header_value("Content-Type"), "application/json");
+  EXPECT_NE(res.body.find("\"next_token_id\":1"), std::string::npos);
+  EXPECT_NE(res.body.find("\"response_text\":\"Hello"), std::string::npos);
 }
 
 TEST(RoutesRegisteredTest, RoutesRegisteredOnStartup) {
